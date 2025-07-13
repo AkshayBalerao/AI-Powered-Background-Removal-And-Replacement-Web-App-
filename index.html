@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <title>AI Background Remover</title>
+</head>
+<body>
+  <div class="container">
+    <h1 class="title">🪄 AI Background Remover</h1>
+    <p class="subtitle">Upload an image, remove its background, and add your own</p>
+
+    <form id="upload-form">
+      <div class="drop-zone" id="drop-zone">
+        <input type="file" id="file-upload" name="file" accept="image/*" required hidden />
+        <p id="drop-text">📂 Drop image or <span class="browse">browse</span></p>
+      </div>
+      <p id="file-name" class="file-name hidden">No image selected</p>
+
+      <div class="button-row">
+        <button type="submit" class="action-button">Remove Background</button>
+        <button type="button" id="reset-button" class="action-button danger">Reset</button>
+      </div>
+    </form>
+
+    <div class="loader hidden" id="loader"></div>
+
+    <section id="result" class="hidden">
+      <div class="preview-grid">
+        <div class="image-card">
+          <h3>Original</h3>
+          <img id="original-image" src="" alt="Original Image" />
+        </div>
+        <div class="image-card">
+          <h3>Without Background</h3>
+          <img id="output-image" src="" alt="Output Image" />
+          <a id="download-link" href="#" download="removed.png" class="download-button">⬇ Download</a>
+        </div>
+        <div class="image-card hidden" id="final-container">
+          <h3>With Background</h3>
+          <img id="final-image" src="" alt="Final Image" />
+          <a id="final-download" href="#" download="final.png" class="download-button">⬇ Download Final</a>
+        </div>
+      </div>
+
+      <div class="background-options">
+        <h3>Add Background</h3>
+        <div class="background-controls">
+          <label><input type="radio" name="bg-type" value="color" checked /> Solid Color</label>
+          <input type="color" id="bg-color" value="#ffffff" />
+          <label><input type="radio" name="bg-type" value="image" /> Upload Image</label>
+          <input type="file" id="bg-image-upload" accept="image/*" />
+          <button id="apply-background" class="action-button">Apply Background</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const dropZone = document.getElementById("drop-zone");
+    const fileInput = document.getElementById("file-upload");
+    const fileNameDisplay = document.getElementById("file-name");
+    const loader = document.getElementById("loader");
+    const resultSection = document.getElementById("result");
+    const originalImg = document.getElementById("original-image");
+    const outputImg = document.getElementById("output-image");
+    const downloadLink = document.getElementById("download-link");
+    const finalContainer = document.getElementById("final-container");
+    const finalImg = document.getElementById("final-image");
+    const finalDownload = document.getElementById("final-download");
+
+    dropZone.addEventListener("click", () => fileInput.click());
+    dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragging"); });
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragging"));
+    dropZone.addEventListener("drop", e => {
+      e.preventDefault();
+      fileInput.files = e.dataTransfer.files;
+      dropZone.classList.remove("dragging");
+      if (fileInput.files.length > 0) {
+        fileNameDisplay.textContent = `✅ ${fileInput.files[0].name}`;
+        fileNameDisplay.classList.remove("hidden");
+      }
+    });
+
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files.length > 0) {
+        fileNameDisplay.textContent = `✅ ${fileInput.files[0].name}`;
+        fileNameDisplay.classList.remove("hidden");
+      }
+    });
+
+    document.getElementById("upload-form").onsubmit = async (e) => {
+      e.preventDefault();
+      const file = fileInput.files[0];
+      if (!file) return alert("Upload an image first");
+
+      loader.classList.remove("hidden");
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/remove-background", { method: "POST", body: formData });
+      loader.classList.add("hidden");
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const removedUrl = URL.createObjectURL(blob);
+        const originalUrl = URL.createObjectURL(file);
+        originalImg.src = originalUrl;
+        outputImg.src = removedUrl;
+        downloadLink.href = removedUrl;
+        resultSection.classList.remove("hidden");
+      } else {
+        alert("❌ Failed to remove background.");
+      }
+    };
+
+    document.getElementById("apply-background").addEventListener("click", async () => {
+      const file = fileInput.files[0];
+      if (!file) return alert("Upload an image first");
+      const bgType = document.querySelector('input[name="bg-type"]:checked').value;
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("bg_type", bgType);
+
+      if (bgType === "color") {
+        formData.append("bg_color", document.getElementById("bg-color").value);
+      } else {
+        const bgFile = document.getElementById("bg-image-upload").files[0];
+        if (!bgFile) return alert("Upload a background image.");
+        formData.append("bg_image", bgFile);
+      }
+
+      loader.classList.remove("hidden");
+      const res = await fetch("/add-background", { method: "POST", body: formData });
+      loader.classList.add("hidden");
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const finalUrl = URL.createObjectURL(blob);
+        finalImg.src = finalUrl;
+        finalDownload.href = finalUrl;
+        finalContainer.classList.remove("hidden");
+      } else {
+        alert("❌ Failed to add background.");
+      }
+    });
+
+    document.getElementById("reset-button").onclick = () => window.location.reload();
+  </script>
+</body>
+</html>
